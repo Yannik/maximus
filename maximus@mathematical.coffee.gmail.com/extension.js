@@ -102,7 +102,7 @@ let onetime = null;
 let oldFullscreenPref = null;
 
 function LOG(message) {
-    log(message);
+    //log(message);
 }
 /* undecorates a window.
  * If I use set_decorations(0) from within the GNOME shell extension (i.e.
