@@ -1,3 +1,5 @@
+/*global global, log */ // <-- jshint
+/*jshint unused:true */
 /*
  * Maximus v1.3
  * Amy Chan <mathematical.coffee@gmail.com>
@@ -192,7 +194,7 @@ function guessWindowXID(win) {
         id = win.get_description().match(/0x[0-9a-f]+/);
         if (id) {
             id = id[0];
-            return id ;
+            return id;
         }
     } catch (err) {
     }
@@ -238,12 +240,13 @@ function onMaximise(shellwm, actor) {
     }
 
     // do nothing if maximus isn't managing decorations for this window
-    if (!win._maximusDecoratedOriginal) {
+    // or we are not maximized
+    if (!max || !win._maximusDecoratedOriginal) {
         return;
     }
 
     // if this is a partial maximization
-    if( max != (Meta.MaximizeFlags.HORIZONTAL | Meta.MaximizeFlags.VERTICAL)) {
+    if (max !== (Meta.MaximizeFlags.HORIZONTAL | Meta.MaximizeFlags.VERTICAL)) {
         // if we want decorations for partial maximization
         if (!undecorateHalfMaximised) {
             decorate(win);
@@ -256,7 +259,7 @@ function onMaximise(shellwm, actor) {
 
 function onUnmaximise(shellwm, actor) {
     let win = actor.meta_window;
-    LOG('onUnmaximise: ' + win.get_title());
+    LOG('onUnmaximise: ' + win.get_title() + ' originally decorated? ' + win._maximusDecoratedOriginal);
     /* don't decorate if it's not meant to be decorated (like chrome with no 'use system title bars') */
     if (!win._maximusDecoratedOriginal) {
         return;
@@ -272,7 +275,7 @@ function onWindowAdded(ws, win) {
      * (see workspace.js _doAddWindow)
      */
     win._maximusDecoratedOriginal = win.decorated !== false || false;
-    LOG('onWindowAdded: ' + win.get_title());
+    LOG('onWindowAdded: ' + win.get_title() + ' decorated? ' + win._maximusDecoratedOriginal);
     if (!win.get_compositor_private()) {
         Mainloop.idle_add(function () {
             onMaximise(null, win.get_compositor_private());
