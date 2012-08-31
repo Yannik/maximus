@@ -82,6 +82,7 @@ const BLACKLIST = true; // if it's a white list, change this to FALSE
 // It is *CASE SENSITIVE*.
 const WMLIST = [
     // FOR EXAMPLE to leave terminal & thunderbird windows alone:
+    //'Gnome-terminal',
     //'Terminal',
     //'Thunderbird'
 ];
