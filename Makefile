@@ -1,22 +1,19 @@
 #=============================================================================
 UUID=maximus@mathematical.coffee.gmail.com
-FILES=metadata.json *.js stylesheet.css schemas
+FILES=metadata.json extension.js stylesheet.css
 #=============================================================================
 default_target: all
 .PHONY: clean all zip
 
 clean:
-	rm -f $(UUID).zip $(UUID)/schemas/gschemas.compiled
+	rm -f $(UUID).zip
 
-# compile the schemas
-all: clean
-	@if [ -d $(UUID)/schemas ]; then \
-		glib-compile-schemas $(UUID)/schemas; \
-	fi
+# nothing in this target
+all:
 
-zip: all
+zip: clean all
 	zip -rq $(UUID).zip $(FILES:%=$(UUID)/%)
 
-dev-zip: all
+dev-zip: clean all
 	(cd $(UUID); \
 		zip -rq ../$(UUID).zip $(FILES))
