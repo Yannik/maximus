@@ -1,7 +1,7 @@
 /*global global, log */ // <-- jshint
 /*jshint unused:true */
 /*
- * Maximus v1.3
+ * Maximus v2.1
  * Amy Chan <mathematical.coffee@gmail.com>
  * Other contributors:
  * - Michael Kirk
@@ -69,30 +69,43 @@
  *
  */
 
+/*** If you want to undecorate half-maximised windows then change this to true. ***/
+const undecorateHalfMaximised = false;
+
+/*** Whitelists/blacklists ***/
+const BLACKLIST = true; // if it's a white list, change this to FALSE
+// apps to blacklist or whitelist. If blacklist, all windows *but* these
+// will be undecorated on maximize. If whitelist, *only* these windows will
+// be undecorated on maximize.
+// You have to add the wmclass to the list. To see this, do Alt+F2 > Windows >
+// look at 'wmclass'.
+// It is *CASE SENSITIVE*.
+const WMLIST = [
+    // FOR EXAMPLE to leave terminal & thunderbird windows alone:
+    //'Gnome-terminal',
+    //'Terminal',
+    //'Thunderbird'
+];
+
 /*** Code proper, don't edit anything below **/
 const GLib = imports.gi.GLib;
 const Mainloop = imports.mainloop;
 const Meta = imports.gi.Meta;
-const Shell = imports.gi.Shell;
+const St = imports.gi.St;
 const Util = imports.misc.util;
 
 const Main = imports.ui.main;
 
-const ExtensionUtils = imports.misc.extensionUtils;
-const Me = ExtensionUtils.getCurrentExtension();
-const Convenience = Me.imports.convenience;
-const Prefs = Me.imports.prefs;
 
-
-let maxID = null, minID = null, settingsChangedID = null, changeWorkspaceID = null;
+let maxID = null;
+let minID = null;
+let changeWorkspaceID = null;
 let workspaces = [];
+let onetime = null;
 let oldFullscreenPref = null;
-let settings = null;
-let onetime = 0;
-let APP_LIST, IS_BLACKLIST;
 
 function LOG(message) {
-    log(message);
+    //log(message);
 }
 /* undecorates a window.
  * If I use set_decorations(0) from within the GNOME shell extension (i.e.
@@ -221,27 +234,25 @@ function guessWindowXID(win) {
 function onMaximise(shellwm, actor) {
     let win = actor.get_meta_window(),
         max = win.get_maximized(),
-        app = Shell.WindowTracker.get_default().get_window_app(win),
-        appid = (app ? app.get_id() : -1),
-        inList = APP_LIST.length > 0 && APP_LIST.indexOf(appid) >= 0;
+        inList = WMLIST.length > 0 && WMLIST.indexOf(win.get_wm_class()) >= 0;
 
     LOG('onMaximise: ' + win.get_title() + ' [' + win.get_wm_class() + ']');
-    /* Don't undecorate if it is in the blacklist or not in the whitelist */
-    if ((IS_BLACKLIST && inList) || (!IS_BLACKLIST && !inList)) {
+    /* Don't undecorate if it is in the BLACKLIST or not in the whitelist */
+    if ((BLACKLIST && inList) || (!BLACKLIST && !inList)) {
         return;
     }
 
     // do nothing if maximus isn't managing decorations for this window
     // or we are not maximized
     // (can force if it's in the whitelist)
-    if (!max || (!win._maximusDecoratedOriginal && (IS_BLACKLIST || !inList))) {
+    if (!max || (!win._maximusDecoratedOriginal && (BLACKLIST || !inList))) {
         return;
     }
 
     // if this is a partial maximization
     if (max !== (Meta.MaximizeFlags.HORIZONTAL | Meta.MaximizeFlags.VERTICAL)) {
         // if we want decorations for partial maximization
-        if (!settings.get_boolean(Prefs.UNDECORATE_HALF_MAXIMIZED_KEY)) {
+        if (!undecorateHalfMaximised) {
             decorate(win);
             return;
         }
@@ -251,16 +262,10 @@ function onMaximise(shellwm, actor) {
 }
 
 function onUnmaximise(shellwm, actor) {
-    let win = actor.meta_window,
-        app = Shell.WindowTracker.get_default().get_window_app(win),
-        appid = (app ? app.get_id() : -1),
-        inList = APP_LIST.length > 0 && APP_LIST.indexOf(appid) >= 0;
-    LOG('onUnmaximise: ' + win.get_title());
-    /* don't decorate if it's not meant to be decorated
-     * (like chrome with no 'use system title bars')
-     * (but if we forced it via the blacklist/whitelist then do it)
-     */
-    if (!win._maximusDecoratedOriginal && (IS_BLACKLIST || !inList)) {
+    let win = actor.meta_window;
+    LOG('onUnmaximise: ' + win.get_title() + ' originally decorated? ' + win._maximusDecoratedOriginal);
+    /* don't decorate if it's not meant to be decorated (like chrome with no 'use system title bars') */
+    if (!win._maximusDecoratedOriginal) {
         return;
     }
     decorate(win);
@@ -312,8 +317,10 @@ function onChangeNWorkspaces() {
     }
 }
 
-/* start listening to events and affect already-existing windows. */
-function startUndecorating() {
+function init() {
+}
+
+function enable() {
     /* Connect events */
     maxID = global.window_manager.connect('maximize', onMaximise);
     minID = global.window_manager.connect('unmaximize', onUnmaximise);
@@ -339,11 +346,22 @@ function startUndecorating() {
         onChangeNWorkspaces();
         return false; // define as one-time event
     });
+
+    /* this is needed to prevent Metacity from interpreting an attempted drag
+     * of an undecorated window as a fullscreen request. Otherwise thunderbird
+     * (in particular) has no way to get out of fullscreen, resulting in the user
+     * being stuck there.
+     * See issue #6
+     * https://bitbucket.org/mathematicalcoffee/maximus-gnome-shell-extension/issue/6
+     *
+     * Once we can properly set the window's hide_titlebar_when_maximized property
+     * this will no loner be necessary.
+     */
+    oldFullscreenPref = Meta.prefs_get_force_fullscreen();
+    Meta.prefs_set_force_fullscreen(false);
 }
 
-/* stop listening to events, restore all windows back to their original
- * decoration state. */
-function stopUndecorating() {
+function disable() {
     global.window_manager.disconnect(maxID);
     global.window_manager.disconnect(minID);
     global.window_manager.disconnect(changeWorkspaceID);
@@ -352,7 +370,6 @@ function stopUndecorating() {
     let i = workspaces.length;
     while (i--) {
         workspaces[i].disconnect(workspaces[i]._MaximusWindowAddedId);
-        delete workspaces[i]._MaximusWindowAddedId;
     }
     workspaces = [];
 
@@ -371,52 +388,8 @@ function stopUndecorating() {
             delete winList[i]._maximusDecoratedOriginal;
         }
     }
-}
-
-function init() {
-    settings = Convenience.getSettings();
-}
-
-function enable() {
-    IS_BLACKLIST = settings.get_boolean(Prefs.IS_BLACKLIST_KEY);
-    APP_LIST = settings.get_strv(Prefs.BLACKLIST_KEY);
-
-    startUndecorating();
-
-    /* this is needed to prevent Metacity from interpreting an attempted drag
-     * of an undecorated window as a fullscreen request. Otherwise thunderbird
-     * (in particular) has no way to get out of fullscreen, resulting in the user
-     * being stuck there.
-     * See issue #6
-     * https://bitbucket.org/mathematicalcoffee/maximus-gnome-shell-extension/issue/6
-     *
-     * Once we can properly set the window's hide_titlebar_when_maximized property
-     * this will no loner be necessary.
-     */
-    oldFullscreenPref = Meta.prefs_get_force_fullscreen();
-    Meta.prefs_set_force_fullscreen(false);
-
-    /* Monitor settings changes */
-    settingsChangedID = settings.connect('changed', function (settings, key) {
-        // redecorate every window and undecorate again according to the
-        // new settings.
-        stopUndecorating();
-
-        IS_BLACKLIST = settings.get_boolean(Prefs.IS_BLACKLIST_KEY);
-        APP_LIST = settings.get_strv(Prefs.BLACKLIST_KEY);
-
-        startUndecorating();
-    });
-}
-
-function disable() {
-    stopUndecorating();
 
     /* restore old meta force fullscreen pref */
     Meta.prefs_set_force_fullscreen(oldFullscreenPref);
-
-    /* disconnect settings changes */
-    if (settingsChangedID) {
-        settings.disconnect(settingsChangedID);
-    }
 }
+
