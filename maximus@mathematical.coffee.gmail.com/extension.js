@@ -88,6 +88,10 @@ const APP_LIST = [
     //'firefox.desktop'
 ];
 
+// A different method of doing the decoration/undecoration.
+// It is more stable than the default method, but *will not work* with
+// some window themes (for example Ubuntu's Ambience and Radiance) that do
+// not properly implement the set_hide_titlebar property of windows.
 const USE_SET_HIDE_TITLEBAR = true;
 
 /*** Code proper, don't edit anything below **/
