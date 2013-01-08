@@ -92,6 +92,7 @@ const APP_LIST = [
 // It is more stable than the default method, but *will not work* with
 // some window themes (for example Ubuntu's Ambiance and Radiance) that do
 // not properly implement the set_hide_titlebar property of windows.
+// Also *DOES NOT WORK ON GNOME 3.2*.
 var USE_SET_HIDE_TITLEBAR = true;
 
 /*** Code proper, don't edit anything below **/
@@ -105,7 +106,11 @@ const Util = imports.misc.util;
 const Main = imports.ui.main;
 
 // if the theme is Ambiance or Radiance then USE_SET_HIDE_TITLEBAR won't work so switch.
-if (USE_SET_HIDE_TITLEBAR && Meta.prefs_get_theme().match(/^(?:Ambiance|Radiance)$/)) {
+// (or if we're on GNOME 3.2)
+const ShellVersion = imports.misc.config.PACKAGE_VERSION.split('.');
+if (USE_SET_HIDE_TITLEBAR &&
+        (Meta.prefs_get_theme().match(/^(?:Ambiance|Radiance)$/) ||
+         ShellVersion[1] < 4)) {
     USE_SET_HIDE_TITLEBAR = false;
 }
 
