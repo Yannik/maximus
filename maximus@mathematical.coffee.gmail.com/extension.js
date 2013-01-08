@@ -69,7 +69,32 @@
  *
  */
 
-/* ** Code proper, don't edit anything below ** */
+/*** If you want to undecorate half-maximised windows then change this to true. ***/
+const undecorateHalfMaximised = false;
+
+/*** Whitelists/blacklists ***/
+const IS_BLACKLIST = true; // if it's a white list, change this to FALSE
+
+// apps to blacklist or whitelist. If blacklist, all windows *but* these
+// will be undecorated on maximize. If whitelist, *only* these windows will
+// be undecorated on maximize.
+// You have to add the app name to the list. To see this, do Alt+F2 > Windows >
+// look at 'app'.
+// It is *CASE SENSITIVE*.
+const APP_LIST = [
+    // FOR EXAMPLE to leave terminal & thunderbird windows alone:
+    //'gnome-terminal.desktop',
+    //'thunderbird.desktop',
+    //'firefox.desktop'
+];
+
+// A different method of doing the decoration/undecoration.
+// It is more stable than the default method, but *will not work* with
+// some window themes (for example Ubuntu's Ambiance and Radiance) that do
+// not properly implement the set_hide_titlebar property of windows.
+var USE_SET_HIDE_TITLEBAR = true;
+
+/*** Code proper, don't edit anything below **/
 const GLib = imports.gi.GLib;
 const Lang = imports.lang;
 const Mainloop = imports.mainloop;
@@ -79,20 +104,20 @@ const Util = imports.misc.util;
 
 const Main = imports.ui.main;
 
-const ExtensionUtils = imports.misc.extensionUtils;
-const Me = ExtensionUtils.getCurrentExtension();
-const Convenience = Me.imports.convenience;
-const Prefs = Me.imports.prefs;
+// if the theme is Ambiance or Radiance then USE_SET_HIDE_TITLEBAR won't work so switch.
+if (USE_SET_HIDE_TITLEBAR && Meta.prefs_get_theme().match(/^(?:Ambiance|Radiance)$/)) {
+    USE_SET_HIDE_TITLEBAR = false;
+}
 
 // convenience
 Meta.MaximizeFlags.BOTH = (Meta.MaximizeFlags.VERTICAL | Meta.MaximizeFlags.HORIZONTAL);
 
-let maxID = null, minID = null, settingsChangedID = null, changeWorkspaceID = null;
+let maxID = null;
+let minID = null;
+let changeWorkspaceID = null;
 let workspaces = [];
+let onetime = null;
 let oldFullscreenPref = null;
-let settings = null;
-let onetime = 0;
-let APP_LIST, IS_BLACKLIST, USE_SET_HIDE_TITLEBAR;
 
 function LOG(message) {
     //log(message);
@@ -335,7 +360,7 @@ function onMaximise(shellwm, actor) {
     // if this is a partial maximization, and we do not wish to undecorate
     // half-maximized windows, make sure the window is decorated.
     if (max !== Meta.MaximizeFlags.BOTH &&
-            !settings.get_boolean(Prefs.UNDECORATE_HALF_MAXIMIZED_KEY)) {
+            !undecorateHalfMaximised) {
         decorate(win);
         return;
     }
@@ -437,7 +462,7 @@ function onWindowAdded(ws, win) {
         setHideTitlebar(win, true);
         // set_hide_titlebar undecorates half maximized, so if we wish not to we
         // will have to manually redo it ourselves
-        if (!settings.get_boolean(Prefs.UNDECORATE_HALF_MAXIMIZED_KEY)) {
+        if (!undecorateHalfMaximised) {
             win._maxHStateId = win.connect('notify::maximized-horizontally', onWindowChangesMaximiseState);
             win._maxVStateId = win.connect('notify::maximized-vertically', onWindowChangesMaximiseState);
             if (win.get_maximized()) {
@@ -448,7 +473,7 @@ function onWindowAdded(ws, win) {
         // if it is added initially maximized, we undecorate it.
         let max = win.get_maximized();
         if ((max === Meta.MaximizeFlags.BOTH) ||
-            (settings.get_boolean(Prefs.UNDECORATE_HALF_MAXIMIZED_KEY) && max)) {
+            (undecorateHalfMaximised && max)) {
             if (!win.get_compositor_private()) {
                 Mainloop.idle_add(function () {
                     undecorate(win);
@@ -486,14 +511,6 @@ function onChangeNWorkspaces() {
 
 /** Start listening to events and undecorate already-existing windows. */
 function startUndecorating() {
-    // cache some variables for convenience
-    IS_BLACKLIST = settings.get_boolean(Prefs.IS_BLACKLIST_KEY);
-    APP_LIST = settings.get_strv(Prefs.BLACKLIST_KEY);
-    USE_SET_HIDE_TITLEBAR = settings.get_boolean(Prefs.USE_SET_HIDE_TITLEBAR_KEY);
-    if (USE_SET_HIDE_TITLEBAR && Meta.prefs_get_theme().match(/^(?:Ambiance|Radiance)$/)) {
-        USE_SET_HIDE_TITLEBAR = false;
-    }
-
     /* Connect events */
     changeWorkspaceID = global.screen.connect('notify::n-workspaces', onChangeNWorkspaces);
     // if we are not using the set_hide_titlebar hint, we must listen to maximize and unmaximize events.
@@ -592,27 +609,12 @@ function stopUndecorating() {
 }
 
 function init() {
-    settings = Convenience.getSettings();
 }
 
 function enable() {
     startUndecorating();
-
-    /* Monitor settings changes */
-    settingsChangedID = settings.connect('changed', function () {
-        // redecorate every window and undecorate again according to the
-        // new settings.
-        stopUndecorating();
-
-        startUndecorating();
-    });
 }
 
 function disable() {
     stopUndecorating();
-
-    /* disconnect settings changes */
-    if (settingsChangedID) {
-        settings.disconnect(settingsChangedID);
-    }
 }
