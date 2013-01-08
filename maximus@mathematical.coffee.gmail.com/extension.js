@@ -436,7 +436,11 @@ function onUnmaximise(shellwm, actor) {
     //
     // This is only necessary if USE_SET_HIDE_TITLEBAR is `false` (otherwise
     // this is not an issue).
-    if (!USE_SET_HIDE_TITLEBAR && global.display.get_grab_op() === Meta.GrabOp.MOVING) {
+    //
+    // Note: only works on GNOME 3.4+ (no grab-op-end on 3.2).
+    if (ShellVersion[1] >= 4 &&
+            !USE_SET_HIDE_TITLEBAR &&
+            global.display.get_grab_op() === Meta.GrabOp.MOVING) {
         if (grabID) {
             // shouldn't happen, but oh well.
             global.display.disconnect(grabID);
