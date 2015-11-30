@@ -1,6 +1,6 @@
 {
  "extension-id": "maximus",
- "uuid": "maximus@mathematical.coffee.gmail.com",
+ "uuid": "maximus@yannik.sembritzki.org",
  "settings-schema": "org.gnome.shell.extensions.maximus",
  "name": "Maximus",
  "gettext-domain": "maximus",
@@ -8,9 +8,14 @@
  "shell-version": [ 
      "3.4",
      "3.6",
-     "3.8"
+     "3.8",
+     "3.10",
+     "3.12",
+     "3.14",
+     "3.16",
+     "3.18"
  ],
- "url": "https://bitbucket.org/mathematicalcoffee/maximus-gnome-shell-extension",
+ "url": "https://github.com/Yannik/maximus-gnome-shell-extension",
  "version": 9,
  "dev-version": "2.1_gnome3.4+"
 }
